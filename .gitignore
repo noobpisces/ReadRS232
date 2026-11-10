@@ -1,0 +1,13 @@
+# Build
+bin/
+obj/
+publish/
+*.user
+.vs/
+
+# Khoá ký ClickOnce — không đưa lên repo public
+*.pfx
+*.snk
+
+# Bản sao lưu code cũ (chỉ giữ ở máy)
+_backup_v1/
