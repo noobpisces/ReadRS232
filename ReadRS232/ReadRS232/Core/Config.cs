@@ -349,7 +349,7 @@ namespace ReadRS232.Core
         [Category("3. Xử lý số"), DisplayName("Cộng thêm"), Description("Giá trị ra = giá trị đọc × Nhân với + Cộng thêm. Bản cũ cộng 13.")]
         public double Offset { get; set; }
 
-        [Category("3. Xử lý số"), DisplayName("Số chữ số thập phân"), Description("-1 = giữ nguyên.")]
+        [Category("3. Xử lý số"), DisplayName("Số chữ số thập phân"), Description("-1 = giữ đúng số chữ số như dữ liệu gốc (12.500 → 12.500). Khi có \"Nhân với\" ≠ 1 thì bỏ số 0 thừa ở cuối.")]
         public int Decimals { get; set; } = -1;
 
         [Category("3. Xử lý số"), DisplayName("Dùng dấu phẩy thập phân"), Description("Xuất 12,5 thay vì 12.5.")]

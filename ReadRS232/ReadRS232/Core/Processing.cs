@@ -197,13 +197,14 @@ namespace ReadRS232.Core
             // ---- xử lý số ----
             if (_c.IsNumber)
             {
-                if (!TryParseNumber(value, out double num)) { r.Reason = $"\"{value}\" không phải số"; return r; }
+                if (!TryParseNumber(value, out double num, out int srcDecimals)) { r.Reason = $"\"{value}\" không phải số"; return r; }
                 num = num * _c.Multiply + _c.Offset;
-                if (_c.Decimals >= 0) num = Math.Round(num, Math.Min(_c.Decimals, 15), MidpointRounding.AwayFromZero);
+                int decimals = ResolveDecimals(srcDecimals);
+                if (decimals >= 0) num = Math.Round(num, decimals, MidpointRounding.AwayFromZero);
                 if (_c.MinValue.HasValue && num < _c.MinValue.Value) { r.Reason = $"{num} nhỏ hơn giới hạn"; return r; }
                 if (_c.MaxValue.HasValue && num > _c.MaxValue.Value) { r.Reason = $"{num} lớn hơn giới hạn"; return r; }
-                value = _c.Decimals >= 0
-                    ? num.ToString("F" + Math.Min(_c.Decimals, 15), CultureInfo.InvariantCulture)
+                value = decimals >= 0
+                    ? num.ToString("F" + decimals, CultureInfo.InvariantCulture)
                     : num.ToString("0.##########", CultureInfo.InvariantCulture);
                 if (_c.DecimalComma) value = value.Replace('.', ',');
                 r.Number = num;
@@ -237,9 +238,13 @@ namespace ReadRS232.Core
         }
 
         /// <summary>Hiểu được 12.5 / 12,5 / 1,234.5 / 1.234,5 / "+ 12.5" bất kể Windows đang dùng ngôn ngữ gì.</summary>
-        public static bool TryParseNumber(string s, out double v)
+        public static bool TryParseNumber(string s, out double v) => TryParseNumber(s, out v, out _);
+
+        /// <summary>Như trên, kèm số chữ số sau dấu thập phân của chuỗi gốc ("12.500" → 3).</summary>
+        public static bool TryParseNumber(string s, out double v, out int decimals)
         {
             v = 0;
+            decimals = 0;
             if (string.IsNullOrWhiteSpace(s)) return false;
             s = s.Replace(" ", "").Trim();
             int dot = s.LastIndexOf('.'), comma = s.LastIndexOf(',');
@@ -249,7 +254,31 @@ namespace ReadRS232.Core
                 else s = s.Replace(",", "");                                // 1,234.5
             }
             else if (comma >= 0) s = s.Replace(',', '.');
-            return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v);
+            if (!double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v)) return false;
+            decimals = CountDecimals(s);
+            return true;
+        }
+
+        static int CountDecimals(string s)
+        {
+            int dot = s.IndexOf('.');
+            if (dot < 0) return 0;
+            int n = 0;
+            for (int i = dot + 1; i < s.Length && char.IsDigit(s[i]); i++) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Số chữ số thập phân khi xuất. Decimals ≥ 0: dùng đúng giá trị đó.
+        /// Decimals = -1 (giữ nguyên): giữ số chữ số như dữ liệu gốc (12.500 → 12.500), tính cả phần lẻ của
+        /// "Cộng thêm". Nếu có "Nhân với" ≠ 1 thì không suy ra được độ chính xác → trả -1 (bỏ số 0 thừa như cũ).
+        /// </summary>
+        int ResolveDecimals(int srcDecimals)
+        {
+            if (_c.Decimals >= 0) return Math.Min(_c.Decimals, 15);
+            if (_c.Multiply != 1) return -1;
+            int offDecimals = CountDecimals(_c.Offset.ToString("R", CultureInfo.InvariantCulture));
+            return Math.Min(Math.Max(srcDecimals, offDecimals), 15);
         }
     }
 }
