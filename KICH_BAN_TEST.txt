@@ -1,0 +1,439 @@
+================================================================================
+  KỊCH BẢN TEST: MÁY ĐO TESA -> ReadRS232 -> CỔNG COM ẢO -> APP ĐO
+================================================================================
+  Ngày test    : ____ / ____ / ________        Người test : ____________________
+  Máy tính     : ________________________      Phiên bản ReadRS232 : 2.0 (bản mới)
+--------------------------------------------------------------------------------
+
+MỤC LỤC
+  1. Mục tiêu và sơ đồ
+  2. Những gì đã biết trước khi test
+  3. Chuẩn bị (làm trước khi bắt đầu)
+  4. Các kịch bản test  T0 -> T11
+  5. Sơ đồ quyết định nhanh
+  6. Bảng tra lỗi
+  7. Phụ lục: các lệnh
+  8. Mẫu báo cáo gửi cấp trên
+
+
+================================================================================
+1. MỤC TIÊU VÀ SƠ ĐỒ
+================================================================================
+
+Mục tiêu: app đo hiện được giá trị của máy Tesa khi dữ liệu đi qua app trung
+gian ReadRS232 (thay vì nối thẳng), và giá trị không bị sai lệch.
+
+    [Máy Tesa] --RS232--> COM9 --> [ReadRS232] --> COM100 ===== COM101 --> [App đo]
+                                                   (cặp cổng ảo com0com)
+
+  - ReadRS232 đọc COM9, ghi ra COM100.
+  - com0com nối COM100 với COM101 như một sợi cáp ảo.
+  - App đo mở COM101 để nghe.
+
+Hai file mang theo:
+  - ReadRS232.exe    (bản mới)   lấy ở  ReadRS232\ReadRS232\bin\Release\
+  - AppDoGiaLap.exe  (app đo giả) lấy ở  AppDoGiaLap\bin\
+
+
+================================================================================
+2. NHỮNG GÌ ĐÃ BIẾT TRƯỚC KHI TEST
+================================================================================
+
+  Đã biết từ hôm trước. Kiểm lại cả 4 mục đầu buổi test (khoảng 10 phút),
+  đánh dấu vào cột "Kiểm lại":
+
+  Hôm trước | Kiểm lại | Nội dung                                  | Kiểm bằng
+  ----------+----------+-------------------------------------------+----------
+     [x]    |   [ ]    | Cặp cổng ảo COM100 / COM101 đã tạo xong   | T0
+     [x]    |   [ ]    | App đo nối THẲNG với Tesa thì đọc được    | T1
+     [x]    |   [ ]    | ReadRS232 đọc được dữ liệu Tesa từ COM9   | T2
+     [x]    |   [ ]    | ReadRS232 ghi COM100 thì COM101 nhận được | T3
+
+      => App đo hiểu được chuỗi gốc của Tesa.
+  [ ] App đo nối qua ReadRS232: CHƯA hiện giá trị.
+
+Nguyên nhân nghi ngờ nhất: lần thử trước ReadRS232 gửi "số đã xử lý" với mẫu
+{value}, tức chỉ gửi "12.345", không còn giống chuỗi gốc của Tesa và không có
+ký tự kết thúc dòng. App đo nhận được nhưng không hiểu / chờ mãi hết dòng.
+
+Đã kiểm trên máy phát triển (cặp cổng ảo khác, không có Tesa và app đo thật):
+  - Chế độ "Nguyên bản từng byte": gửi 256 giá trị byte, nhận lại giống hệt.
+  - Bật DTR/RTS ở cổng đích thì bên nhận thấy DSR, CTS, CD đều BẬT.
+  - com0com giữ lại dữ liệu ghi lúc bên kia chưa mở cổng, và giao khi mở.
+    => App đo vừa kết nối có thể nhận ngay 1 giá trị cũ. Không phải lỗi.
+
+
+================================================================================
+3. CHUẨN BỊ (làm trước khi bắt đầu)
+================================================================================
+
+  [ ] 3.1  Sao lưu cấu hình ReadRS232 đang dùng (lệnh ở mục 7.1).
+  [ ] 3.2  Chép ReadRS232.exe bản mới và AppDoGiaLap.exe lên máy.
+  [ ] 3.3  Ghi lại thông số cổng mà APP ĐO đang cài khi nối thẳng Tesa:
+
+             Baud: ________   Data bits: ____   Parity: ______   Stop bits: ____
+             Handshake / Flow control: ______________________________________
+
+  [ ] 3.4  Ghi lại thông số cổng nguồn (COM9) đang cài trong ReadRS232:
+
+             Baud: ________   Data bits: ____   Parity: ______   Stop bits: ____
+
+  [ ] 3.5  Mở ReadRS232 > Cài đặt > Giao diện > bật "Hiện bảng Monitor".
+
+Quy ước khi ghi kết quả:  đánh dấu [X] vào ĐẠT hoặc KHÔNG ĐẠT, ghi chú ngắn.
+Mỗi kịch bản chỉ đổi MỘT thứ so với kịch bản trước, để biết thứ nào gây lỗi.
+
+
+================================================================================
+4. CÁC KỊCH BẢN TEST
+================================================================================
+
+--------------------------------------------------------------------------------
+T0. KIỂM TRA MÔI TRƯỜNG
+--------------------------------------------------------------------------------
+Mục đích : chắc chắn đủ 3 cổng COM9, COM100, COM101.
+Các bước :
+  1. Chạy lệnh liệt kê cổng COM (mục 7.2).
+Mong đợi : danh sách có COM9, COM100, COM101.
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT      Danh sách cổng: ______________________
+Nếu không đạt: thiếu COM9 -> kiểm tra cáp / driver của Tesa.
+               thiếu COM100/101 -> tạo lại cặp com0com (mục 7.5).
+
+--------------------------------------------------------------------------------
+T1. ĐỐI CHỨNG: TESA NỐI THẲNG APP ĐO
+--------------------------------------------------------------------------------
+Mục đích : xác nhận hôm nay app đo và Tesa vẫn chạy bình thường khi nối thẳng.
+           Đây là mốc so sánh cho mọi kịch bản sau.
+Các bước :
+  1. Tắt ReadRS232.
+  2. App đo kết nối thẳng COM9.
+  3. Bấm gửi trên Tesa 3 lần.
+Mong đợi : app đo hiện đủ 3 giá trị, đúng với màn hình Tesa.
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT
+  Giá trị trên Tesa: __________   Giá trị trên app đo: __________
+Nếu không đạt: DỪNG. Lỗi không liên quan ReadRS232, xử lý kết nối Tesa trước.
+
+--------------------------------------------------------------------------------
+T2. ReadRS232 ĐỌC TESA, GHI LẠI CHUỖI GỐC
+--------------------------------------------------------------------------------
+Mục đích : biết chính xác Tesa gửi chuỗi gì (quan trọng cho các bước sau).
+Các bước :
+  1. Ngắt app đo khỏi COM9.
+  2. Mở ReadRS232, nguồn = COM9, thông số cổng như mục 3.4.
+  3. Bấm gửi trên Tesa 1 lần, xem dòng "RX" trong Monitor.
+  4. Tick ô hiển thị hex trong Monitor, bấm gửi lần nữa.
+Mong đợi : có dòng RX, chữ đọc được (không phải ký tự rác).
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT
+  Chuỗi dạng chữ (ghi cả \r \n): ___________________________________________
+  Chuỗi dạng hex               : ___________________________________________
+Nếu không đạt: ra ký tự rác -> sai Baud / Data bits / Parity ở cổng nguồn.
+               không có RX   -> sai cổng, hoặc Tesa cần bật DTR ở cổng nguồn.
+
+--------------------------------------------------------------------------------
+T3. ĐƯỜNG ỐNG ẢO VỚI APP ĐO GIẢ LẬP
+--------------------------------------------------------------------------------
+Mục đích : chứng minh dữ liệu tới COM101 giống hệt chuỗi gốc ở T2.
+Cấu hình ReadRS232, đầu ra "Chuyển tiếp sang cổng COM":
+     Cổng COM đích   : COM100, tick "Bật DTR" và "Bật RTS"
+     Bộ định dạng    : Nguyên bản từng byte (như nối thẳng thiết bị)
+     Hai chiều       : bật
+Các bước :
+  1. Tắt app đo thật.
+  2. Mở AppDoGiaLap.exe, chọn COM101, bấm "Kết nối".
+  3. Bấm gửi trên Tesa 3 lần.
+Mong đợi :
+  - Monitor của ReadRS232 có dòng "TX -> COM100" sau mỗi dòng RX.
+  - AppDoGiaLap hiện số, dòng RX của nó trùng từng byte với chuỗi hex ở T2.
+  - Dòng trạng thái của AppDoGiaLap: DSR BẬT, CTS BẬT, CD BẬT.
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT
+  Hex nhận ở COM101: ______________________________________________________
+  Giống T2 không   : [ ] giống hệt   [ ] khác (ghi chỗ khác): _______________
+Nếu không đạt: không có dòng TX -> đầu ra chưa bật hoặc COM100 chưa "đã kết nối".
+               có cảnh báo "đích chưa mở" -> COM100 đang bị app khác giữ.
+
+--------------------------------------------------------------------------------
+T4. APP ĐO THẬT CÓ MỞ ĐƯỢC COM101 KHÔNG
+--------------------------------------------------------------------------------
+Mục đích : loại trừ khả năng app đo không mở được cổng số lớn.
+Các bước :
+  1. Đóng AppDoGiaLap.
+  2. Mở app đo thật, cho kết nối COM101.
+  3. Mở AppDoGiaLap, chọn COM101, bấm "Kết nối".
+Mong đợi : AppDoGiaLap báo KHÔNG mở được (vì app đo đang giữ COM101).
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT
+Nếu không đạt (AppDoGiaLap mở được): app đo CHƯA hề mở COM101.
+     -> kiểm tra app đo chọn đúng cổng chưa.
+     -> nếu app đo không cho chọn COM101: đổi cặp ảo sang số nhỏ, ví dụ
+        COM10 / COM11 (mục 7.5), rồi làm lại từ T3 với số cổng mới.
+Xong bước này nhớ đóng AppDoGiaLap.
+
+--------------------------------------------------------------------------------
+T5. KỊCH BẢN CHÍNH: APP ĐO THẬT, CHẾ ĐỘ NGUYÊN BẢN
+--------------------------------------------------------------------------------
+Mục đích : app đo thật hiện giá trị Tesa qua ReadRS232.
+Cấu hình : giữ nguyên như T3 (Nguyên bản từng byte, DTR/RTS bật, Hai chiều bật).
+           App đo: thông số cổng như mục 3.3.
+Các bước :
+  1. App đo thật kết nối COM101.
+  2. Bấm gửi trên Tesa 5 lần, mỗi lần một giá trị khác nhau.
+Mong đợi : app đo hiện đủ 5 giá trị, đúng với màn hình Tesa.
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT
+  Lần | Tesa       | App đo     | Khớp
+   1  | __________ | __________ | [ ]
+   2  | __________ | __________ | [ ]
+   3  | __________ | __________ | [ ]
+   4  | __________ | __________ | [ ]
+   5  | __________ | __________ | [ ]
+Nếu ĐẠT      : xong phần chính. Làm tiếp T8 nếu cần sửa số, rồi T10.
+Nếu KHÔNG ĐẠT: làm T6 rồi T7.
+
+--------------------------------------------------------------------------------
+T6. CHÂN TÍN HIỆU DTR / RTS          (chỉ làm khi T5 không đạt)
+--------------------------------------------------------------------------------
+Mục đích : xem app đo có phụ thuộc chân DSR / CTS / CD không.
+Các bước : chạy lại T5 với 3 cấu hình ở "Cổng COM đích":
+
+  Bật DTR | Bật RTS | App đo hiện số?
+  --------+---------+----------------
+    có    |   có    | [ ] có  [ ] không
+    có    |  không  | [ ] có  [ ] không
+   không  |   có    | [ ] có  [ ] không
+
+  Thử thêm: đổi Handshake trong app đo về "None / Không".  [ ] có  [ ] không
+Kết luận : ____________________________________________________________________
+
+--------------------------------------------------------------------------------
+T7. APP ĐO CÓ GỬI LỆNH HỎI TRƯỚC KHÔNG   (chỉ làm khi T5 không đạt)
+--------------------------------------------------------------------------------
+Mục đích : có app chỉ đọc sau khi tự gửi 1 lệnh xuống thiết bị.
+Các bước :
+  1. Tắt ReadRS232.
+  2. Mở AppDoGiaLap, chọn COM100 (đầu của ReadRS232), bấm "Kết nối".
+  3. App đo thật kết nối COM101, bấm các nút đo / lấy dữ liệu nếu có.
+  4. Xem AppDoGiaLap có dòng RX nào không.
+Mong đợi : không có dòng RX nào (app đo chỉ ngồi nghe).
+
+  Kết quả : [ ] Không gửi gì   [ ] CÓ gửi, chuỗi: ___________________________
+Nếu CÓ gửi: app đo chạy kiểu hỏi - đáp. Mở lại ReadRS232 với "Hai chiều" bật,
+            xem Monitor có dòng "<- từ COM100" và Tesa có trả lời không.
+            Ghi lại chuỗi lệnh để báo cho người viết ReadRS232.
+
+  Thử tiếp ngay tại đây (vẫn AppDoGiaLap ở COM100, app đo ở COM101):
+  5. Trong ô "Gửi về thiết bị" của AppDoGiaLap, gõ đúng chuỗi gốc ở T2
+     (ví dụ +012.345\r\n) rồi bấm "Gửi".
+     App đo thật hiện số?  [ ] có  [ ] không
+     -> "có" nghĩa là app đo nhận tốt từ cổng ảo; lỗi nằm ở cấu hình ReadRS232.
+     -> "không" nghĩa là app đo không chịu đọc từ cổng ảo (xem T4, T6).
+
+--------------------------------------------------------------------------------
+T8. GỬI GIÁ TRỊ ĐÃ XỬ LÝ, GIỮ KHUNG GỐC     (chỉ làm khi cần sửa số)
+--------------------------------------------------------------------------------
+Mục đích : ReadRS232 sửa giá trị (cộng bù, làm tròn) mà app đo vẫn đọc được.
+Cấu hình ReadRS232:
+     Xử lý dữ liệu > Bộ định dạng nguồn : Tự nhận: số cuối cùng trong khung
+     Đầu ra        > Bộ định dạng       : Khung gốc, thay số đã xử lý + CR LF
+Các bước :
+  1. "Cộng thêm" = 0. Bấm gửi trên Tesa.
+     Mong đợi: app đo hiện ĐÚNG giá trị Tesa (khung gửi đi giống hệt khung gốc).
+  2. "Cộng thêm" = 1. Bấm gửi trên Tesa.
+     Mong đợi: app đo hiện giá trị Tesa + 1.
+  3. Nếu bước 1 không hiện: đổi sang "Khung gốc, thay số đã xử lý + CR", thử lại.
+
+  Bước | Tesa       | App đo     | Đạt
+   1   | __________ | __________ | [ ]
+   2   | __________ | __________ | [ ]
+   3   | __________ | __________ | [ ]   (bộ định dạng dùng được: ____________)
+Lưu ý: test xong nhớ trả "Cộng thêm" về giá trị đúng của công việc.
+
+--------------------------------------------------------------------------------
+T9. BẢNG THỬ CÁC BỘ ĐỊNH DẠNG ĐẦU RA        (chỉ làm khi T5 và T8 không đạt)
+--------------------------------------------------------------------------------
+Mục đích : tìm bộ định dạng mà app đo chấp nhận.
+Cách làm : đổi "Bộ định dạng" của đầu ra, lưu, bấm gửi trên Tesa, ghi kết quả.
+           Muốn xem chính xác chuỗi gửi đi: xem dòng TX trong Monitor.
+
+  Bộ định dạng                                        | App đo hiện | Giá trị
+  ----------------------------------------------------+-------------+----------
+  Nguyên bản từng byte (như nối thẳng thiết bị)       | [ ]         | ________
+  Khung gốc, thay số đã xử lý + CR LF                 | [ ]         | ________
+  Khung gốc, thay số đã xử lý + CR                    | [ ]         | ________
+  Khung gốc + CR LF                                   | [ ]         | ________
+  Khung gốc + CR                                      | [ ]         | ________
+  Chỉ số + CR LF: 12.345                              | [ ]         | ________
+  Chỉ số + CR                                         | [ ]         | ________
+  Chỉ số + LF                                         | [ ]         | ________
+  Số có dấu, 3 số lẻ + CR LF: +12.345                 | [ ]         | ________
+  Số + đơn vị mm + CR LF: 12.345 mm                   | [ ]         | ________
+  Kiểu Mitutoyo 0.001: 01A+0012.345 CR                | [ ]         | ________
+  Kiểu Mitutoyo 0.01: 01A+00012.34 CR                 | [ ]         | ________
+  Kiểu Mitutoyo 0.001, 5 số nguyên: 01A+00012.345 CR  | [ ]         | ________
+
+Lưu ý: 3 kiểu Mitutoyo được viết theo trí nhớ về khung "01A+...", CHƯA đối
+chiếu với thiết bị thật. Nếu cần dùng, so với dòng RX của một máy Mitutoyo
+thật (T11) rồi sửa "Mẫu dữ liệu gửi" cho khớp từng ký tự.
+
+--------------------------------------------------------------------------------
+T10. ĐỘ ỔN ĐỊNH
+--------------------------------------------------------------------------------
+Mục đích : chạy thực tế không rớt số, tự hồi phục khi rút cáp.
+Dùng cấu hình đã ĐẠT ở T5 hoặc T8.
+
+  a. Đo liên tiếp 30 lần.
+       Số lần app đo hiện đúng: ____ / 30                  [ ] ĐẠT  [ ] KHÔNG
+  b. Rút cáp Tesa 10 giây rồi cắm lại, đo 3 lần.
+       ReadRS232 tự kết nối lại, app đo hiện đủ 3 lần      [ ] ĐẠT  [ ] KHÔNG
+  c. Tắt app đo, mở lại, kết nối COM101, đo 3 lần.           [ ] ĐẠT  [ ] KHÔNG
+       (có thể hiện ngay 1 giá trị cũ lúc vừa kết nối: bình thường, xem mục 2)
+  d. Tắt ReadRS232, mở lại (app đo vẫn mở), đo 3 lần.        [ ] ĐẠT  [ ] KHÔNG
+  e. Khởi động lại máy, mở 2 app theo thứ tự bất kỳ, đo 3 lần.
+                                                             [ ] ĐẠT  [ ] KHÔNG
+  Ghi chú: ___________________________________________________________________
+
+--------------------------------------------------------------------------------
+T11. MÁY ĐO MITUTOYO QUA ReadRS232            (nếu có thiết bị)
+--------------------------------------------------------------------------------
+Mục đích : xác nhận cùng cách làm dùng được cho máy Mitutoyo.
+Các bước :
+  1. Cắm Mitutoyo, đặt làm nguồn của ReadRS232 (đúng cổng và thông số).
+  2. Ghi lại dòng RX:  chữ: ______________________  hex: ______________________
+  3. Đầu ra để "Nguyên bản từng byte". App đo thật kết nối COM101, đo 3 lần.
+
+  Kết quả : [ ] ĐẠT   [ ] KHÔNG ĐẠT       Giá trị khớp: [ ] có  [ ] không
+
+
+================================================================================
+5. SƠ ĐỒ QUYẾT ĐỊNH NHANH
+================================================================================
+
+  T1 không đạt ........ lỗi Tesa / app đo, không liên quan ReadRS232. Dừng.
+  T2 không đạt ........ sai thông số cổng nguồn COM9.
+  T3 không đạt ........ sai cấu hình đầu ra ReadRS232 hoặc com0com.
+  T4 không đạt ........ app đo không mở COM101 -> đổi cặp ảo sang số nhỏ.
+  T5 ĐẠT .............. xong. Nguyên nhân cũ: gửi sai định dạng. Làm T8, T10.
+  T5 không đạt
+     + T6 có tổ hợp chạy được ..... app đo cần chân tín hiệu, giữ tổ hợp đó.
+     + T7 app đo có gửi lệnh ....... app đo kiểu hỏi - đáp, báo người viết app.
+     + T7 bước 5 "có" ............. app đo ổn, xem lại cấu hình ReadRS232.
+     + tất cả đều không ........... làm T9, gửi kết quả T2 + T7 để phân tích.
+
+
+================================================================================
+6. BẢNG TRA LỖI
+================================================================================
+
+  Hiện tượng                               | Nguyên nhân hay gặp
+  -----------------------------------------+----------------------------------
+  ReadRS232: "COMx đang bị app khác mở"    | App đo / terminal đang giữ cổng đó
+  ReadRS232: "Không thấy COMx"             | Chưa cắm cáp, sai số cổng
+  RX ra ký tự rác                          | Sai Baud / Data bits / Parity
+  Có RX nhưng không có dòng TX             | Đầu ra chuyển tiếp tắt hoặc chưa nối
+  Cảnh báo "đích chưa mở"                  | COM100 chưa mở được
+  AppDoGiaLap: dòng cam "CHƯA có ký tự     | Mẫu gửi thiếu \r hoặc \r\n ở cuối
+    kết thúc dòng"                         |
+  App đo vừa kết nối đã hiện 1 số cũ       | com0com giao dữ liệu tồn, bình thường
+  App đo hiện số nhưng lệch                | "Cộng thêm" / "Nhân với" khác 0 / 1
+  AppDoGiaLap không mở được COM101         | App đo thật đang giữ (đúng như T4)
+
+  File log lỗi của ReadRS232 :  %AppData%\ReadRS232\errors.log
+  File cấu hình của ReadRS232:  %AppData%\ReadRS232\config.xml
+
+
+================================================================================
+7. PHỤ LỤC: CÁC LỆNH
+================================================================================
+Mở PowerShell (Start > gõ "powershell") rồi dán từng lệnh.
+
+7.1  Sao lưu cấu hình ReadRS232 trước khi test
+
+  Copy-Item "$env:APPDATA\ReadRS232\config.xml" "$env:APPDATA\ReadRS232\config-truoc-test.xml"
+
+     Khôi phục lại (tắt ReadRS232 trước):
+
+  Copy-Item "$env:APPDATA\ReadRS232\config-truoc-test.xml" "$env:APPDATA\ReadRS232\config.xml" -Force
+
+7.2  Liệt kê các cổng COM đang có
+
+  [System.IO.Ports.SerialPort]::GetPortNames()
+
+7.3  Mở file log lỗi của ReadRS232
+
+  notepad "$env:APPDATA\ReadRS232\errors.log"
+
+7.4  Gửi tay 1 chuỗi vào COM100 (khi không dùng AppDoGiaLap; tắt ReadRS232 trước)
+     Sửa chuỗi trong ngoặc kép cho giống chuỗi gốc ở T2. `r là CR, `n là LF.
+
+  $p = New-Object System.IO.Ports.SerialPort COM100,9600,None,8,One; $p.DtrEnable=$true; $p.RtsEnable=$true; $p.Open(); $p.Write("+012.345`r`n"); $p.Close()
+
+7.5  com0com: xem và đổi tên cặp cổng ảo (cần quyền Administrator)
+     Mở "Command Prompt" bằng Run as administrator:
+
+  cd /d "C:\Program Files (x86)\com0com"
+  setupc list
+  setupc change CNCA0 PortName=COM10
+  setupc change CNCB0 PortName=COM11
+
+     Tên CNCA0 / CNCB0 lấy theo kết quả của "setupc list". Đường dẫn cài đặt
+     có thể khác tuỳ máy. Cũng có thể đổi bằng giao diện "Setup" của com0com.
+
+7.6  Chạy app đo giả lập và tự kết nối luôn 1 cổng
+
+  .\AppDoGiaLap.exe COM101
+
+
+================================================================================
+8. MẪU BÁO CÁO GỬI CẤP TRÊN
+================================================================================
+
+Tiêu đề: Kết quả test kết nối máy đo Tesa với app đo qua ReadRS232 - ngày ____
+
+1. Kết luận
+   [ ] ĐẠT: app đo hiện đúng giá trị Tesa khi đi qua ReadRS232.
+   [ ] ĐẠT MỘT PHẦN: ______________________________________________________
+   [ ] CHƯA ĐẠT: ___________________________________________________________
+
+2. Nguyên nhân của lỗi ban đầu
+   ________________________________________________________________________
+   (ví dụ: ReadRS232 gửi chỉ con số, không đúng khung dữ liệu và không có ký
+   tự kết thúc dòng mà app đo cần; đã chuyển sang gửi nguyên bản từng byte.)
+
+3. Cấu hình chạy được
+   Nguồn            : COM____  ______ baud, ____ data bits, parity ____, stop ____
+   Cổng ảo          : COM____ (ReadRS232)  <->  COM____ (app đo)
+   Bộ định dạng     : ______________________________________________________
+   Bật DTR / RTS    : ______ / ______        Hai chiều: ______
+   Cộng thêm / Nhân : ______ / ______
+
+4. Kết quả từng kịch bản
+
+   Mã  | Nội dung                                   | Kết quả
+   ----+--------------------------------------------+-----------------
+   T0  | Đủ cổng COM                                | ĐẠT / KHÔNG / -
+   T1  | Tesa nối thẳng app đo (đối chứng)          | ĐẠT / KHÔNG / -
+   T2  | ReadRS232 đọc được Tesa                    | ĐẠT / KHÔNG / -
+   T3  | Dữ liệu tới COM101 giống hệt chuỗi gốc     | ĐẠT / KHÔNG / -
+   T4  | App đo mở được COM101                      | ĐẠT / KHÔNG / -
+   T5  | App đo hiện giá trị qua ReadRS232          | ĐẠT / KHÔNG / -
+   T6  | Phụ thuộc chân DTR/RTS                     | có / không / -
+   T7  | App đo gửi lệnh hỏi                        | có / không / -
+   T8  | Gửi giá trị đã xử lý, giữ khung gốc        | ĐẠT / KHÔNG / -
+   T10 | Ổn định (30 lần, rút cáp, khởi động lại)   | ____ / 30, ĐẠT / KHÔNG
+   T11 | Máy Mitutoyo qua ReadRS232                 | ĐẠT / KHÔNG / -
+
+5. Số liệu đối chiếu (lấy từ T5)
+   Số lần đo: ____   Số lần khớp với màn hình Tesa: ____   Sai lệch lớn nhất: ____
+
+6. Vấn đề còn tồn tại / rủi ro
+   ________________________________________________________________________
+
+7. Đề xuất bước tiếp theo
+   ________________________________________________________________________
+
+================================================================================
+  HẾT
+================================================================================

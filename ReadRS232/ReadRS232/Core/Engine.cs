@@ -107,6 +107,8 @@ namespace ReadRS232.Core
                 Number = r.Number,
                 Frame = r.Text,
                 FrameBytes = frame,
+                ValueStart = r.ValueStart,
+                ValueLength = r.ValueLength,
                 Time = DateTime.Now,
                 Sequence = Interlocked.Increment(ref _seq)
             };
@@ -178,7 +180,7 @@ namespace ReadRS232.Core
             var ev = new ValueEvent
             {
                 Route = last.Route, Value = last.Value, Number = last.Number, Frame = last.Frame,
-                FrameBytes = last.FrameBytes, Time = DateTime.Now, Sequence = Interlocked.Increment(ref _seq)
+                FrameBytes = last.FrameBytes, ValueStart = last.ValueStart, ValueLength = last.ValueLength, Time = DateTime.Now, Sequence = Interlocked.Increment(ref _seq)
             };
             AppLog.Write(Name, LogKind.Info, "Gửi lại " + ev.Value);
             Enqueue(ev);

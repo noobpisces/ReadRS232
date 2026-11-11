@@ -13,6 +13,8 @@ namespace ReadRS232.Core
         public double? Number;
         public string Frame;
         public byte[] FrameBytes;
+        public int ValueStart = -1;   // vị trí phần giá trị trong Frame
+        public int ValueLength;
         public DateTime Time;
         public long Sequence;
     }
@@ -109,7 +111,7 @@ namespace ReadRS232.Core
     /// </summary>
     public sealed class OutputTemplate
     {
-        static readonly Regex Token = new Regex(@"\{(value|frame|hex|time|route|n)(?::([^{}]*))?\}",
+        static readonly Regex Token = new Regex(@"\{(value|same|frame|hex|time|route|n)(?::([^{}]*))?\}",
             RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         readonly string _template;
@@ -134,6 +136,7 @@ namespace ReadRS232.Core
                             ? ev.Number.Value.ToString(fmt, CultureInfo.InvariantCulture)
                             : ev.Value;
                         break;
+                    case "same": v = SameFrame(ev); break;
                     case "frame": v = ev.Frame; break;
                     case "hex": v = TextUtil.ToHex(ev.FrameBytes); break;
                     case "time": v = ev.Time.ToString(string.IsNullOrEmpty(fmt) ? "HH:mm:ss" : fmt, CultureInfo.InvariantCulture); break;
@@ -144,6 +147,49 @@ namespace ReadRS232.Core
                 v = v ?? "";
                 return encode != null ? encode(v) : v;
             });
+        }
+
+        /// <summary>{same}: khung gốc của thiết bị, chỉ thay phần số bằng giá trị đã xử lý, giữ đúng kiểu viết của số gốc.</summary>
+        static string SameFrame(ValueEvent ev)
+        {
+            string f = ev.Frame ?? "";
+            if (ev.ValueStart < 0 || ev.ValueLength <= 0 || ev.ValueStart + ev.ValueLength > f.Length) return f;
+            string orig = f.Substring(ev.ValueStart, ev.ValueLength);
+            string repl = ev.Number.HasValue ? FormatLike(orig, ev.Number.Value) ?? ev.Value : ev.Value;
+            return f.Substring(0, ev.ValueStart) + repl + f.Substring(ev.ValueStart + ev.ValueLength);
+        }
+
+        /// <summary>
+        /// Viết số mới theo đúng kiểu của số gốc: cùng số chữ số thập phân, cùng dấu thập phân (. hoặc ,),
+        /// cùng độ rộng nếu gốc đệm số 0 (+00012.345), có dấu + nếu gốc có dấu. Trả null nếu gốc không phải số đơn giản.
+        /// </summary>
+        public static string FormatLike(string orig, double num)
+        {
+            string s = (orig ?? "").Trim();
+            if (s.Length == 0) return null;
+            char sign = s[0] == '+' || s[0] == '-' ? s[0] : '\0';
+            string gap = "";
+            if (sign != '\0')
+            {
+                s = s.Substring(1);
+                if (s.StartsWith(" ")) { gap = " "; s = s.TrimStart(' '); }
+            }
+            int sep = s.LastIndexOfAny(new[] { '.', ',' });
+            string ip = sep >= 0 ? s.Substring(0, sep) : s;
+            string fp = sep >= 0 ? s.Substring(sep + 1) : "";
+            if (ip.Length == 0 && fp.Length == 0) return null;
+            foreach (char c in ip + fp) if (c < '0' || c > '9') return null;
+
+            double abs = Math.Round(Math.Abs(num), fp.Length, MidpointRounding.AwayFromZero);
+            string t = abs.ToString("F" + fp.Length, CultureInfo.InvariantCulture);
+            int dot = t.IndexOf('.');
+            string ni = dot >= 0 ? t.Substring(0, dot) : t;
+            string nf = dot >= 0 ? t.Substring(dot + 1) : "";
+            bool zeroPad = ip.Length > 1 && ip[0] == '0';
+            if (zeroPad) ni = ni.PadLeft(ip.Length, '0');
+
+            string ns = num < 0 && abs != 0 ? "-" : sign == '+' || (sign == '-' && zeroPad) ? "+" : "";
+            return ns + (ns.Length > 0 ? gap : "") + ni + (sep >= 0 ? s[sep] + nf : "");
         }
     }
 }

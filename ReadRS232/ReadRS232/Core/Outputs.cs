@@ -85,10 +85,22 @@ namespace ReadRS232.Core
 
         public override void OnRaw(byte[] data)
         {
-            if (!_host.IsOpen) return;   // đích chưa sẵn sàng thì bỏ, không làm nghẽn nguồn
-            try { _host.Write(data); }
+            if (!_host.IsOpen)   // đích chưa sẵn sàng thì bỏ, không làm nghẽn nguồn
+            {
+                if (!_dropWarned)
+                    AppLog.Write(Route.Name, LogKind.Warn, "Không chuyển tiếp được, đích chưa mở: " + _c.Target.Describe());
+                _dropWarned = true;
+                return;
+            }
+            _dropWarned = false;
+            try
+            {
+                _host.Write(data);
+                AppLog.Write(Route.Name, LogKind.Tx, "→ " + _c.Target.Describe(), data);
+            }
             catch (Exception ex) { AppLog.Write(Route.Name, LogKind.Warn, "Chuyển tiếp lỗi: " + ex.Message); }
         }
+        bool _dropWarned;
 
         void BackChannel(byte[] data)
         {

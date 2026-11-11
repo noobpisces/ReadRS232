@@ -308,8 +308,46 @@ namespace ReadRS232.Core
         [Description("Windows-1252")] Windows1252
     }
 
+    [TypeConverter(typeof(LocalizedEnumConverter))]
+    public enum SourcePreset
+    {
+        [Description("Tuỳ chỉnh (tự đặt bên dưới)")] Custom,
+        [Description("Tự nhận: số cuối cùng trong khung (Tesa, Mitutoyo, đa số máy đo)")] LastNumber,
+        [Description("Mitutoyo: 01A+00012.345")] Mitutoyo,
+        [Description("Số đứng trước đơn vị: 12.5 kg, 3.20 mm")] NumberBeforeUnit,
+        [Description("Lấy cả khung, không coi là số")] WholeText
+    }
+
     public class ProcessingConfig
     {
+        public const string MitutoyoRegex = @"^\d{2}[A-Z]([-+]?\d+(?:\.\d+)?)";
+        public const string UnitRegex = @"[-+]?\d*\.?\d+(?=\s*[a-zA-Z])";
+
+        [XmlIgnore, RefreshProperties(RefreshProperties.All)]
+        [Category("2. Lấy giá trị"), DisplayName("Bộ định dạng nguồn"),
+         Description("Chọn nhanh kiểu dữ liệu của thiết bị; tự đặt \"Cách lấy giá trị\", \"Regex\" và \"Là số\" bên dưới. Xem dòng RX trong Monitor để biết thiết bị gửi gì.")]
+        public SourcePreset Preset
+        {
+            get
+            {
+                if (ExtractMode == ExtractMode.LastNumber && IsNumber) return SourcePreset.LastNumber;
+                if (ExtractMode == ExtractMode.Regex && IsNumber && Regex == MitutoyoRegex) return SourcePreset.Mitutoyo;
+                if (ExtractMode == ExtractMode.Regex && IsNumber && Regex == UnitRegex) return SourcePreset.NumberBeforeUnit;
+                if (ExtractMode == ExtractMode.WholeFrame && !IsNumber) return SourcePreset.WholeText;
+                return SourcePreset.Custom;
+            }
+            set
+            {
+                switch (value)
+                {
+                    case SourcePreset.LastNumber: ExtractMode = ExtractMode.LastNumber; IsNumber = true; break;
+                    case SourcePreset.Mitutoyo: ExtractMode = ExtractMode.Regex; Regex = MitutoyoRegex; IsNumber = true; break;
+                    case SourcePreset.NumberBeforeUnit: ExtractMode = ExtractMode.Regex; Regex = UnitRegex; IsNumber = true; break;
+                    case SourcePreset.WholeText: ExtractMode = ExtractMode.WholeFrame; IsNumber = false; break;
+                }
+            }
+        }
+
         [Category("1. Tách khung"), DisplayName("Cách tách khung"),
          Description("Dữ liệu từ thiết bị đến từng mảnh; cần ghép lại thành từng \"khung\" (1 lần cân, 1 mã vạch...).")]
         public FrameMode FrameMode { get; set; } = FrameMode.Line;
@@ -335,7 +373,7 @@ namespace ReadRS232.Core
 
         [Category("2. Lấy giá trị"), DisplayName("Regex"),
          Description("Biểu thức chính quy. Nếu có nhóm tên (?<value>...) hoặc nhóm số 1 thì lấy nhóm đó, không thì lấy cả phần khớp. Mặc định: số đứng trước đơn vị (12.5 kg → 12.5).")]
-        public string Regex { get; set; } = @"[-+]?\d*\.?\d+(?=\s*[a-zA-Z])";
+        public string Regex { get; set; } = UnitRegex;
 
         [Category("2. Lấy giá trị"), DisplayName("Regex: không phân biệt hoa thường")]
         public bool RegexIgnoreCase { get; set; } = true;
@@ -385,7 +423,7 @@ namespace ReadRS232.Core
         public bool Enabled { get; set; } = true;
 
         [Category("1. Chung"), DisplayName("Mẫu dữ liệu gửi"),
-         Description("Nội dung gửi đi. Biến: {value} giá trị, {value:0.00} định dạng số, {frame} khung gốc, {hex}, {time} hoặc {time:yyyy-MM-dd HH:mm:ss}, {route}, {n} số thứ tự. Hỗ trợ \\r \\n \\t \\xHH.")]
+         Description("Nội dung gửi đi. Biến: {value} giá trị, {value:0.00} định dạng số, {frame} khung gốc, {same} khung gốc nhưng thay số bằng giá trị đã xử lý (giữ đúng kiểu viết số của thiết bị), {hex}, {time} hoặc {time:yyyy-MM-dd HH:mm:ss}, {route}, {n} số thứ tự. Hỗ trợ \\r \\n \\t \\xHH.")]
         public string Template { get; set; } = "{value}";
 
         [Category("1. Chung"), DisplayName("Chờ trước khi gửi (ms)")]
@@ -458,8 +496,62 @@ namespace ReadRS232.Core
         [Description("Giá trị đã xử lý (theo Mẫu dữ liệu)")] Value
     }
 
+    [TypeConverter(typeof(LocalizedEnumConverter))]
+    public enum ForwardPreset
+    {
+        [Description("Tuỳ chỉnh (tự đặt Mẫu dữ liệu gửi)")] Custom,
+        [Description("Nguyên bản từng byte (như nối thẳng thiết bị)")] Raw,
+        [Description("Khung gốc, thay số đã xử lý + CR LF")] SameCrLf,
+        [Description("Khung gốc, thay số đã xử lý + CR")] SameCr,
+        [Description("Khung gốc + CR LF")] FrameCrLf,
+        [Description("Khung gốc + CR")] FrameCr,
+        [Description("Chỉ số + CR LF: 12.345")] ValueCrLf,
+        [Description("Chỉ số + CR")] ValueCr,
+        [Description("Chỉ số + LF")] ValueLf,
+        [Description("Số có dấu, 3 số lẻ + CR LF: +12.345")] SignedCrLf,
+        [Description("Số + đơn vị mm + CR LF: 12.345 mm")] UnitMmCrLf,
+        [Description("Kiểu Mitutoyo 0.001: 01A+0012.345 CR")] Mitutoyo3,
+        [Description("Kiểu Mitutoyo 0.01: 01A+00012.34 CR")] Mitutoyo2,
+        [Description("Kiểu Mitutoyo 0.001, 5 số nguyên: 01A+00012.345 CR")] Mitutoyo3Wide
+    }
+
     public abstract class ForwardOutputConfig : OutputConfig
     {
+        static readonly Dictionary<ForwardPreset, string> PresetTemplates = new Dictionary<ForwardPreset, string>
+        {
+            [ForwardPreset.SameCrLf] = @"{same}\r\n",
+            [ForwardPreset.SameCr] = @"{same}\r",
+            [ForwardPreset.FrameCrLf] = @"{frame}\r\n",
+            [ForwardPreset.FrameCr] = @"{frame}\r",
+            [ForwardPreset.ValueCrLf] = @"{value}\r\n",
+            [ForwardPreset.ValueCr] = @"{value}\r",
+            [ForwardPreset.ValueLf] = @"{value}\n",
+            [ForwardPreset.SignedCrLf] = @"{value:+0.000;-0.000}\r\n",
+            [ForwardPreset.UnitMmCrLf] = @"{value} mm\r\n",
+            [ForwardPreset.Mitutoyo3] = @"01A{value:+0000.000;-0000.000}\r",
+            [ForwardPreset.Mitutoyo2] = @"01A{value:+00000.00;-00000.00}\r",
+            [ForwardPreset.Mitutoyo3Wide] = @"01A{value:+00000.000;-00000.000}\r",
+        };
+
+        [XmlIgnore, RefreshProperties(RefreshProperties.All)]
+        [Category("2. Chuyển tiếp"), DisplayName("Bộ định dạng"),
+         Description("Chọn nhanh kiểu dữ liệu gửi cho app bên kia; tự đặt \"Gửi gì\" và \"Mẫu dữ liệu gửi\". Sau khi chọn vẫn sửa tay Mẫu dữ liệu gửi được.")]
+        public ForwardPreset Preset
+        {
+            get
+            {
+                if (Mode == ForwardMode.Raw) return ForwardPreset.Raw;
+                foreach (var kv in PresetTemplates) if (kv.Value == Template) return kv.Key;
+                return ForwardPreset.Custom;
+            }
+            set
+            {
+                if (value == ForwardPreset.Raw) { Mode = ForwardMode.Raw; return; }
+                Mode = ForwardMode.Value;   // "Tuỳ chỉnh" cũng chuyển sang gửi theo Mẫu dữ liệu
+                if (PresetTemplates.TryGetValue(value, out string t)) Template = t;
+            }
+        }
+
         [Category("2. Chuyển tiếp"), DisplayName("Gửi gì"),
          Description("Thô: chép nguyên luồng byte như dây nối thẳng (dùng để chia cổng cho app khác qua com0com). Đã xử lý: chỉ gửi giá trị theo Mẫu dữ liệu.")]
         public ForwardMode Mode { get; set; } = ForwardMode.Raw;
@@ -478,7 +570,8 @@ namespace ReadRS232.Core
         public override string TypeTitle => "Chuyển tiếp sang cổng COM";
 
         [Category("3. Cổng đích"), DisplayName("Cổng COM đích"), Description("Ví dụ 1 đầu của cặp com0com; app kia mở đầu còn lại.")]
-        public SerialEndpointConfig Port { get; set; } = new SerialEndpointConfig();
+        // DTR/RTS bật sẵn: qua com0com, app bên kia thấy DSR/CD/CTS = bật như đang nối thiết bị thật.
+        public SerialEndpointConfig Port { get; set; } = new SerialEndpointConfig { DtrEnable = true, RtsEnable = true };
 
         public override EndpointConfig Target => Port;
     }

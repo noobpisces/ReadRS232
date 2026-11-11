@@ -124,6 +124,8 @@ namespace ReadRS232.Core
         public string Text;
         public string Value;
         public double? Number;
+        public int ValueStart = -1;   // vị trí phần giá trị trong Text (cho biến {same})
+        public int ValueLength;
     }
 
     public sealed class ValueProcessor
@@ -175,22 +177,24 @@ namespace ReadRS232.Core
             {
                 case ExtractMode.Regex:
                     if (RegexError != null) { r.Reason = "Regex sai: " + RegexError; return r; }
-                    if (_rx == null) { value = text; break; }
+                    if (_rx == null) { value = text; r.ValueStart = 0; r.ValueLength = text.Length; break; }
                     Match m;
                     try { m = _rx.Match(text); }
                     catch (RegexMatchTimeoutException) { r.Reason = "Regex chạy quá lâu"; return r; }
                     if (!m.Success) { r.Reason = "không khớp Regex"; return r; }
                     var g = m.Groups["value"];
-                    value = g.Success ? g.Value : m.Groups.Count > 1 && m.Groups[1].Success ? m.Groups[1].Value : m.Value;
+                    Group used = g.Success ? g : m.Groups.Count > 1 && m.Groups[1].Success ? m.Groups[1] : m;
+                    value = used.Value; r.ValueStart = used.Index; r.ValueLength = used.Length;
                     break;
                 case ExtractMode.FirstNumber:
                 case ExtractMode.LastNumber:
                     var ms = NumberRx.Matches(text);
                     if (ms.Count == 0) { r.Reason = "không có số"; return r; }
-                    value = (_c.ExtractMode == ExtractMode.FirstNumber ? ms[0] : ms[ms.Count - 1]).Value;
+                    var nm = _c.ExtractMode == ExtractMode.FirstNumber ? ms[0] : ms[ms.Count - 1];
+                    value = nm.Value; r.ValueStart = nm.Index; r.ValueLength = nm.Length;
                     break;
                 default:
-                    value = text;
+                    value = text; r.ValueStart = 0; r.ValueLength = text.Length;
                     break;
             }
 
