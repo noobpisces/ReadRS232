@@ -24,6 +24,8 @@ namespace ReadRS232.Core
         }
 
         public virtual bool WantsRaw => false;
+        /// <summary>Nhận cả khung không lấy được số (chuyển nguyên văn).</summary>
+        public virtual bool AcceptsPassThrough => false;
         public virtual EndpointHost Host => null;
         public virtual void Start() { }
         public virtual void OnRaw(byte[] data) { }
@@ -81,6 +83,9 @@ namespace ReadRS232.Core
 
         public override EndpointHost Host => _host;
         public override bool WantsRaw => _c.Mode == ForwardMode.Raw;
+        public override bool AcceptsPassThrough =>
+            _c.Mode == ForwardMode.Value && _c.PassThroughOther &&
+            Template.UsesFrame;
         public override void Start() => _host.Start();
 
         public override void OnRaw(byte[] data)

@@ -120,6 +120,7 @@ namespace ReadRS232.Core
     {
         public bool Ok;
         public bool Quiet;        // bị bỏ qua nhưng không cần ghi log (khung rỗng, chờ ổn định)
+        public bool Filtered;     // có giá trị hợp lệ nhưng bị lọc (trùng / chờ ổn định), khác với khung không lấy được số
         public string Reason;
         public string Text;
         public string Value;
@@ -205,8 +206,8 @@ namespace ReadRS232.Core
                 num = num * _c.Multiply + _c.Offset;
                 int decimals = ResolveDecimals(srcDecimals);
                 if (decimals >= 0) num = Math.Round(num, decimals, MidpointRounding.AwayFromZero);
-                if (_c.MinValue.HasValue && num < _c.MinValue.Value) { r.Reason = $"{num} nhỏ hơn giới hạn"; return r; }
-                if (_c.MaxValue.HasValue && num > _c.MaxValue.Value) { r.Reason = $"{num} lớn hơn giới hạn"; return r; }
+                if (_c.MinValue.HasValue && num < _c.MinValue.Value) { r.Filtered = true; r.Reason = $"{num} nhỏ hơn giới hạn"; return r; }
+                if (_c.MaxValue.HasValue && num > _c.MaxValue.Value) { r.Filtered = true; r.Reason = $"{num} lớn hơn giới hạn"; return r; }
                 value = decimals >= 0
                     ? num.ToString("F" + decimals, CultureInfo.InvariantCulture)
                     : num.ToString("0.##########", CultureInfo.InvariantCulture);
@@ -214,6 +215,7 @@ namespace ReadRS232.Core
                 r.Number = num;
             }
             r.Value = value;
+            r.Filtered = true;   // từ đây trở xuống, mọi lần trả về sớm đều là bị lọc
 
             // ---- lọc ----
             bool force = _forceNext;
@@ -237,6 +239,7 @@ namespace ReadRS232.Core
             _forceNext = false;
             _lastEmitted = value;
             _lastEmitTime = DateTime.Now;
+            r.Filtered = false;
             r.Ok = true;
             return r;
         }

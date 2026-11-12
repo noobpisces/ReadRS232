@@ -17,6 +17,7 @@ namespace ReadRS232.Core
         public int ValueLength;
         public DateTime Time;
         public long Sequence;
+        public bool PassThrough;      // khung không lấy được số, chỉ chuyển nguyên văn cho đầu ra COM/TCP
     }
 
     public static class TextUtil
@@ -121,7 +122,11 @@ namespace ReadRS232.Core
         {
             template = string.IsNullOrEmpty(template) ? "{value}" : template;
             _template = unescape ? TextUtil.Unescape(template) : template;
+            UsesFrame = Regex.IsMatch(_template, @"\{(same|frame)(:[^{}]*)?\}", RegexOptions.IgnoreCase);
         }
+
+        /// <summary>Mẫu có chứa {same} hoặc {frame}, tức là có chỗ đặt nguyên khung của thiết bị.</summary>
+        public bool UsesFrame { get; }
 
         public string Render(ValueEvent ev, Func<string, string> encode = null)
         {

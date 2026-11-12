@@ -560,6 +560,10 @@ namespace ReadRS232.Core
          Description("Dữ liệu app bên kia gửi về cũng được chuyển ngược về thiết bị nguồn (app bên kia điều khiển được thiết bị).")]
         public bool Bidirectional { get; set; } = true;
 
+        [Category("2. Chuyển tiếp"), DisplayName("Chuyển cả khung không có số"),
+         Description("Khi gửi giá trị đã xử lý: khung thiết bị gửi mà không lấy được số (trả lời lệnh, thông báo...) vẫn được chuyển nguyên văn theo Mẫu dữ liệu, để app bên kia nhận đủ như nối thẳng thiết bị. Chỉ có tác dụng khi Mẫu dữ liệu dùng {same} hoặc {frame}.")]
+        public bool PassThroughOther { get; set; } = true;
+
         [Browsable(false)] [XmlIgnore] public abstract EndpointConfig Target { get; }
 
         public override string Describe() => "Chuyển tiếp → " + Target.Describe() + (Mode == ForwardMode.Raw ? " (thô)" : "");

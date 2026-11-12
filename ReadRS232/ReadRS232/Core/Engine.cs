@@ -96,7 +96,19 @@ namespace ReadRS232.Core
 
             if (!r.Ok)
             {
-                if (!r.Quiet) AppLog.Write(Name, LogKind.Info, $"Bỏ qua \"{TextUtil.Visualize(r.Text)}\": {r.Reason}");
+                // Khung không lấy được số (trả lời lệnh, thông báo...): đầu ra COM/TCP vẫn chuyển nguyên văn,
+                // để app bên kia nhận đủ như nối thẳng thiết bị (app đo chờ khung trả lời mà bị bỏ sẽ treo).
+                bool pass = !r.Filtered && !string.IsNullOrEmpty(r.Text) && _outputs.Any(o => o.AcceptsPassThrough);
+                if (pass)
+                {
+                    AppLog.Write(Name, LogKind.Info, $"Không có số trong \"{TextUtil.Visualize(r.Text)}\" ({r.Reason}): chuyển nguyên khung");
+                    Enqueue(new ValueEvent
+                    {
+                        Route = Name, Value = r.Text, Frame = r.Text, FrameBytes = frame,
+                        Time = DateTime.Now, Sequence = Interlocked.Increment(ref _seq), PassThrough = true
+                    });
+                }
+                else if (!r.Quiet) AppLog.Write(Name, LogKind.Info, $"Bỏ qua \"{TextUtil.Visualize(r.Text)}\": {r.Reason}");
                 return;
             }
 
@@ -139,6 +151,7 @@ namespace ReadRS232.Core
                     foreach (var o in _outputs)
                     {
                         if (o.WantsRaw) continue;
+                        if (ev.PassThrough && !o.AcceptsPassThrough) continue;
                         try
                         {
                             if (o.Config.DelayMs > 0) Thread.Sleep(o.Config.DelayMs);
